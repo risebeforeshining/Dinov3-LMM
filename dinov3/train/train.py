@@ -13,11 +13,10 @@ import tokenizers
 
 from dinov3.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 from torch.utils.data import Dataset
-#需要修改
+
 from dinov3.train.trainer import Dinov3Trainer
 
 import dinov3.conversation as conversation_lib
-#需要修改
 from dinov3.model import *
 from dinov3.utils import tokenizer_image_token
 
@@ -50,6 +49,10 @@ class ModelArguments:
     mm_use_im_patch_token: bool = field(default=True)
     mm_patch_merge_type: Optional[str] = field(default='flat')
     mm_vision_select_feature: Optional[str] = field(default="patch")
+    #vision encoder 训练参数
+    unfreeze_mm_vision_tower: bool = False
+    mm_vision_tune_layers: int = 0
+
 
 
 @dataclass
@@ -96,6 +99,9 @@ class TrainingArguments(transformers.TrainingArguments):
     lora_bias: str = "none"
     mm_projector_lr: Optional[float] = None
     group_by_modality_length: bool = field(default=False)
+
+    #vision encoder 训练参数
+    mm_vision_lr: Optional[float] = None
 
 
 def maybe_zero_3(param, ignore_status=False, name=None):
@@ -804,7 +810,7 @@ def train(attn_implementation=None):
             model_args.model_name_or_path,
             cache_dir=training_args.cache_dir,
             attn_implementation=attn_implementation,
-            torch_dtype=(torch.bfloat16 if training_args.bf16 else None),
+            dtype=(torch.bfloat16 if training_args.bf16 else None),
             **bnb_model_from_pretrained_args
         )
     else:

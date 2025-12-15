@@ -208,6 +208,25 @@ class Dinov3Trainer(Trainer):
                         "weight_decay": 0.0,
                     },
                 ]
+            # ------------------------------
+            # Add Vision Tower parameter group
+            # ------------------------------
+            # if self.args.mm_vision_lr is not None:
+            #     vision_params = [
+            #         p for n, p in opt_model.named_parameters()
+            #         if ("vision_tower" in n) and p.requires_grad
+            #     ]
+
+            #     if len(vision_params) > 0:
+            #         optimizer_grouped_parameters.append(
+            #             {
+            #                 "params": vision_params,
+            #                 "weight_decay": self.args.weight_decay,
+            #                 "lr": self.args.mm_vision_lr,
+            #             }
+            #         )
+            #         print(f"🔧 Added vision tower optimizer group with lr={self.args.mm_vision_lr}")
+
 
             optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
 
@@ -236,6 +255,13 @@ class Dinov3Trainer(Trainer):
         else:
             super()._save_checkpoint(model, trial)
 
+            vision_tower = self.model.get_model().get_vision_tower()
+            if hasattr(vision_tower, "image_processor"):
+                vision_tower.image_processor.save_pretrained(
+                    os.path.join(output_dir, "image_processor")
+                )
+
+
     def _save(self, output_dir: Optional[str] = None, state_dict=None):
         if getattr(self.args, 'tune_mm_mlp_adapter', False):
             pass
@@ -244,3 +270,9 @@ class Dinov3Trainer(Trainer):
                 self.model.generation_config.do_sample = True
     
             super()._save(output_dir, state_dict)
+
+            vision_tower = self.model.get_model().get_vision_tower()
+            if hasattr(vision_tower, "image_processor"):
+                vision_tower.image_processor.save_pretrained(
+                    os.path.join(output_dir, "image_processor")
+                )

@@ -24,19 +24,56 @@ class Dinov3ViTVisionTower(nn.Module):
         self.select_feature = getattr(args, 'mm_vision_select_feature', 'patch')
 
         if not delay_load or getattr(args, 'unfreeze_mm_vision_tower', False):
+            print(f'Loading DINOv3 vision tower from {pretrained_model_path}...')
             self.load_model()
         else:
+            print(f'Delay loading DINOv3 vision tower from {pretrained_model_path}...')
             self.cfg_only = AutoConfig.from_pretrained(pretrained_model_path)
 
-    def load_model(self, device_map=None):
+    def load_model(self, device_map=None, dtype=None):
         if self.is_loaded:
             print('{} is already loaded, `load_model` called again, skipping.'.format(self.vision_tower_name))
             return
 
         self.image_processor = AutoImageProcessor.from_pretrained(pretrained_model_path, trust_remote_code=True)
-        self.vision_tower = AutoModel.from_pretrained(pretrained_model_path, device_map=device_map, trust_remote_code=True)
-        self.vision_tower.requires_grad_(False)
+        self.vision_tower = AutoModel.from_pretrained(pretrained_model_path, device_map=device_map, trust_remote_code=True, dtype=dtype)
+        # self.vision_tower.requires_grad_(False)
         self.is_loaded = True
+
+    def unfreeze_last_layers(self, num_layers: int):
+        if num_layers <= 0:
+            return
+
+        # 冻结全部
+        self.vision_tower.requires_grad_(False)
+
+        # 获取 encoder 层列表（不同模型可能名字不一样）
+        encoder = None
+        if hasattr(self.vision_tower, "model") and hasattr(self.vision_tower.model, "encoder"):
+            encoder = self.vision_tower.model.encoder
+        elif hasattr(self.vision_tower, "encoder"):
+            encoder = self.vision_tower.encoder
+        else:
+            raise ValueError("Cannot find encoder in vision tower")
+
+        blocks = (
+            encoder.layer if hasattr(encoder, "layer") # ⬅️ 增加对 '.layer' 的检查
+            else encoder.layers if hasattr(encoder, "layers")
+            else encoder.blocks if hasattr(encoder, "blocks")
+            else None
+        )
+
+        if blocks is None:
+            raise ValueError("Cannot find transformer blocks (layer/layers/blocks) in DINOv3 encoder")
+
+        total_layers = len(blocks)
+        start = max(0, total_layers - num_layers)
+
+        print(f"🔓 Unfreezing DINOv3 layers: {start} → {total_layers-1}")
+
+        for layer_idx in range(start, total_layers):
+            for p in blocks[layer_idx].parameters():
+                p.requires_grad = True
 
     def feature_select(self, image_forward_outs):
         image_features = image_forward_outs.hidden_states[self.select_layer]

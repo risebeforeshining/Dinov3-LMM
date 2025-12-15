@@ -14,7 +14,7 @@ from dinov3.utils import get_anyres_image_grid_shape
 class Dinov3MetaModel:
 
     def __init__(self, config):
-        self.config = config
+        super(Dinov3MetaModel, self).__init__(config)
 
         if hasattr(config, "mm_vision_tower"):
             self.vision_tower = build_vision_tower(config, delay_load=True)
@@ -47,6 +47,14 @@ class Dinov3MetaModel:
                 self.vision_tower = [vision_tower]
             else:
                 self.vision_tower = vision_tower
+
+                if model_args.unfreeze_mm_vision_tower:
+                    # 1) 解冻最后 N 层
+                    self.vision_tower.unfreeze_last_layers(model_args.mm_vision_tune_layers)
+                else:
+                    print("Freezing all Vision Tower parameters.")
+                    self.vision_tower.requires_grad_(False)
+
         else:
             if fsdp is not None and len(fsdp) > 0:
                 vision_tower = self.vision_tower[0]

@@ -14,24 +14,40 @@ from dinov3.model.dino_arch import Dinov3MetaModel, Dinov3MetaForCausalLM
 
 class Dinov3Config(LlamaConfig):
     model_type = "dinov3_vicuna"
+    
+    # def __init__(
+    #     self,
+    #     unfreeze_mm_vision_tower: bool = False,
+    #     mm_vision_tune_layers: int = 0,
+    #     mm_vision_lr: Optional[float] = None,
+    #     **kwargs,
+    # ):
+    #     super().__init__(**kwargs)
+    #     self.unfreeze_mm_vision_tower = unfreeze_mm_vision_tower
+    #     self.mm_vision_tune_layers = mm_vision_tune_layers
+    #     self.mm_vision_lr = mm_vision_lr
 
 
-class Dinov3Model(LlamaModel, Dinov3MetaModel):
+class Dinov3Model(Dinov3MetaModel, LlamaModel):
     config_class = Dinov3Config
 
     def __init__(self, config: LlamaConfig):
-        super().__init__(config)
+        super(Dinov3Model, self).__init__(config)
 
 
 class Dinov3ForCausalLM(LlamaForCausalLM, Dinov3MetaForCausalLM):
     config_class = Dinov3Config
 
     def __init__(self, config):
-        super().__init__(config)
+        super(LlamaForCausalLM, self).__init__(config)
         self.model = Dinov3Model(config)
         self.pretraining_tp = config.pretraining_tp
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        # New training args
+        # self.unfreeze_mm_vision_tower = getattr(config, "unfreeze_mm_vision_tower", False)
+        # self.mm_vision_tune_layers = getattr(config, "mm_vision_tune_layers", 0)
+        # self.mm_vision_lr = getattr(config, "mm_vision_lr", None)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -53,6 +69,7 @@ class Dinov3ForCausalLM(LlamaForCausalLM, Dinov3MetaForCausalLM):
         images: Optional[torch.FloatTensor] = None,
         image_sizes: Optional[List[List[int]]] = None,
         return_dict: Optional[bool] = None,
+        cache_position: Optional[torch.LongTensor] = None,
     ) -> Union[Tuple, CausalLMOutputWithPast]:
 
         if inputs_embeds is None:
@@ -83,7 +100,8 @@ class Dinov3ForCausalLM(LlamaForCausalLM, Dinov3MetaForCausalLM):
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict
+            return_dict=return_dict,
+            cache_position=cache_position,
         )
 
     @torch.no_grad()
@@ -123,6 +141,7 @@ class Dinov3ForCausalLM(LlamaForCausalLM, Dinov3MetaForCausalLM):
             position_ids=position_ids,
             attention_mask=attention_mask,
             inputs_embeds=inputs_embeds,
+            cache_position=None,   
             **kwargs
         )
 
